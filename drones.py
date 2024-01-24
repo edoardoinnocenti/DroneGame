@@ -1,13 +1,13 @@
-import os
 import pygame
 from pygame.locals import *
 from PID import PIDController
+from stable_baselines3 import SAC
 
 class Drone:
     def __init__(self):
         # Initialize drone variables
-        self.thruster_amplitude = 0.03
-        self.rotation_amplitude = 0.002
+        self.thruster_amplitude = 0.04
+        self.rotation_amplitude = 0.003
         self.thruster_mean = 0.04
         self.mass = 1
         self.gravity = 0.08
@@ -57,23 +57,25 @@ class DronePID(Drone):
 
     def __init__(self):
         self.name = "PID"
-        self.alpha = 200
+        self.alpha = 70
         super().__init__()
 
-        self.xPID = PIDController(0.0001, 0, 0.0001)
-        self.yPID = PIDController(0.01, 0, 0.001)
-        self.y_dPID = PIDController(0.001, 0, 0)
-        self.thetaPID = PIDController(0.02, 0, 0.01)
+        # Define dt
+        self.dt = 1/60
+
+        self.dt = 1 / 60
+        self.xPID = PIDController(0.2, 0, 0.2, 25, -25)
+        self.thetaPID = PIDController(0.02, 0, 0.01, 1, -1)
+
+        self.yPID = PIDController(2.5, 0, 1.5, 100, -100)
+        self.y_dPID = PIDController(1, 0, 0, 1, -1)
 
     def movement(self, state_vector):
         # Initialize both thrusters with the mean value
         thruster_left = thruster_right = self.thruster_mean
 
         # Parse inputs
-        x_err, x_d, y_err, y_d, theta, theta_d = state_vector
-
-        # Define dt
-        self.dt = 1/60
+        x_err, _ , y_err, y_d, theta, _ = state_vector
 
         # Evaluate and update angular correction
         theta_corr = self.xPID.update(-x_err, self.dt)
@@ -88,4 +90,27 @@ class DronePID(Drone):
         thruster_left += (y_update * self.thruster_amplitude) + (theta_update * self.rotation_amplitude)
         thruster_right += (y_update * self.thruster_amplitude) - (theta_update * self.rotation_amplitude)
 
+        return thruster_left, thruster_right
+    
+class DroneSAC(Drone):
+    def __init__(self):
+        self.name = "SAC"
+        self.alpha = 70
+        model_path = "model/sac_model.zip"
+        self.path = model_path
+        super().__init__()
+
+        self.action_value = SAC.load(self.path)
+
+    def act(self, obs):
+        action, _ = self.action_value.predict(obs)
+        (action0, action1) = (action[0], action[1])
+
+        thruster_left = self.thruster_mean
+        thruster_right = self.thruster_mean
+
+        thruster_left += action0 * self.thruster_amplitude
+        thruster_right += action0 * self.thruster_amplitude
+        thruster_left += action1 * self.rotation_amplitude
+        thruster_right -= action1 * self.rotation_amplitude
         return thruster_left, thruster_right
