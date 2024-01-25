@@ -70,8 +70,8 @@ def display_info(position):
 # Initialize game variables
 time = 0
 step = 0
-time_limit = 30000
-respawn_timer_max = 0.1
+time_limit = 30
+respawn_timer_max = 3
 
 # Define how play the drones
 drones = [DronePlayer(), DronePID(), DroneSAC()]
